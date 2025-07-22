@@ -19,6 +19,7 @@ import { Environment } from '../environment.js'
 import { Symbol as LurchSymbol } from '../symbol.js'
 import { Application } from '../application.js'
 import Algebrite from '../../dependencies/algebrite.js'
+import { addIndex } from './index-definitions.js'
 const compute = Algebrite.run
 import './extensions.js'
 
@@ -79,11 +80,22 @@ const makeParser = parserstr => {
   return { parse: parser, trace: traceparser, raw:  rawparser.parse }
 }
 
-// Take a text file that has n lines and parse it one line at a time, optionally
-// showing how each line parses, and reporting on the number of lines that
-// failed to parse.  The main use is to take a file with LurchNotation lines and
-// convert it to either putdown or latex, and print the results as a test of the
-// parser.
+/**
+ * Parse a test file line by line, applying the given parser to each line.
+ *
+ * Loads a file with the given name from the `./parsers/` directory, splits it
+ * into lines, filters out comments and blank lines, and applies the parser to
+ * each. The main use is to take a file with Lurch Notation lines and convert it
+ * to either putdown or latex, and print the results as a test of theparser.
+ *
+ * @param {Function} parser - The parsing function to apply to each line.
+ * @param {boolean} [verbose=true] - Whether to print each parse result.
+ * @param {string} [name='LurchParserTests'] - The name of the file (without
+ * extension) to load.
+ * @param {Object} [opts] - Optional parsing options passed to the parser.
+ * @returns {any[]|undefined} An array of parse results if `verbose` is true,
+ * otherwise `undefined`.
+ */
 const parseLines = (parser,verbose=true,name='LurchParserTests',opts) => {
   let ans = []
   const lines = 
@@ -107,25 +119,6 @@ const parseLines = (parser,verbose=true,name='LurchParserTests',opts) => {
 
   console.log(`Parsed ${pass} lines successfully, ${fail} failed`)
   return (verbose) ? ans : undefined
-}
-
-// This was a prototype made quickly at the AIM workshop We keep it for now but
-// improve on it below.
-export const lc2algebrite = e => {
-  if (e instanceof Application && 
-      e.numChildren()==3 &&
-      e.child(0) instanceof LurchSymbol &&
-      e.child(0).text()==='is' && 
-      e.child(2) instanceof LurchSymbol &&
-      e.child(2).text()==='prime' &&
-      e.child(1) instanceof LurchSymbol &&
-      e.child(1).text().length > 0 &&
-      Number.isInteger(Number(e.child(1).text())) ) {
-    const n = Number(e.child(1).text())  
-    return `isprime(${n})`
-  } else {  
-    return '0'
-  }
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -281,15 +274,30 @@ export const isArithmetic = {
   ℤ: isIntegerArithmetic,
   ℚ: isRationalArithmetic
 }
-// convert an Arithmetic statement in a ring to a CAS input string
-// this assumes you have already checked that the Arithmetic is in the appropriate ring
+
+/**
+ * Convert a numeric comparison LC (e.g., equality or inequality) to a CAS expression.
+ *
+ * The logic concept must be a binary comparison of two numeric expressions.
+ *
+ * @param {LogicConcept} e - The arithmetic expression to convert.
+ * @returns {string} The CAS-compatible string (e.g., 'x<=y' or 'a==b').
+ */
 export const arithmeticToCAS = e => {
   const ans = numericToCAS(e.child(1))+e.child(0).text()+numericToCAS(e.child(2))
   return ans.replace(/=/g,'==')
             .replace(/≤/g,'<=')
 }
 
-// convert an LC that isNumeric into a CAS input string
+/**
+ * Convert a numeric logic concept into a CAS-compatible expression string.
+ *
+ * Recognizes constants, binary arithmetic expressions, and unary operations
+ * such as negation, factorial, and division.
+ *
+ * @param {LogicConcept} e - The numeric expression to convert.
+ * @returns {string|undefined} The CAS string or `undefined` if input is not numeric.
+ */
 const numericToCAS = e => {
   // just return if it isn't a Numeric Expression
   if (!isNumeric(e)) return
@@ -423,10 +431,12 @@ const numericToCAS = e => {
  */
 export const processShorthands = L => {
 
+  // get the doc
+  const doc = L.root()
+
   // for each symbol named symb, do f, i.e. execute f(symb)
   const processSymbol = ( symb , f ) =>  {
-    L.descendantsSatisfying( x => (x instanceof LurchSymbol) && x.text()===symb )
-     .forEach( s => f(s) )
+    L.index.get(symb).forEach( s => f(s) )
   }
   // make next sibling have a given type.  If the optional third argument is missing, do nothing further.  If flag is 'given' make the target a given.  If the flag is 'claim' make the target a claim.
   const makeNext =  (m,type,flag) => {
@@ -460,11 +470,10 @@ export const processShorthands = L => {
   // result at all from validation. By moving the LC attribute to a js attribute
   // that fixes that problem because the LC copy routine does not copy js
   // attributes on the LC.
-  L.descendantsSatisfying( x => x.hasAttribute('ExpectedResult'))
-    .forEach( s => {
-      s.ExpectedResult = s.getAttribute('ExpectedResult')
-      s.clearAttributes('ExpectedResult')
-    } ) 
+  L.index.get('ExpectedResults').forEach( s => {
+    s.ExpectedResult = s.getAttribute('ExpectedResult')
+    s.clearAttributes('ExpectedResult')
+  } ) 
   
   // attribute the previous sibling with .continued attribute whose value is true if
   // its next sibling is a `<comma` symbol.
@@ -530,40 +539,6 @@ export const processShorthands = L => {
     m.nextSibling().conclusions().forEach( c => c.makeIntoA('Subs'))
     makeNext(m,'Subs','given')
   })  
-  
-  // Deprecated: This is the old version that was made at the AiM workshop to
-  // accommodate the CAS rule.  But the CAS rule has been updated to the Algebra
-  // Tool rule, so this is probably going to be deleted eventually.
-  //
-  // attribute the previous sibling with .by attribute whose value is the text
-  // of the next sibling if it is a symbol, and the next sibling LC itself if it isn't.
-  // processSymbol( 'by' ,  m => { 
-  //   let LHS = m.previousSibling()
-  //   // for testing purposes if the previous sibling is an 'expected result' marker
-  //   // attribute its previous sibling instead
-  //   if (['✔︎','✗','⁉︎','⊘'].some(x=>LHS.matches(x))) LHS = LHS.previousSibling()
-  //   const RHS = m.nextSibling()
-  //   // it should be a LurchSymbol or an Application
-  //   if (RHS instanceof LurchSymbol) {
-  //     if (RHS.text()==='CAS') {
-  //       LHS.by = { CAS: lc2algebrite(LHS) }
-  //       m.remove()
-  //       RHS.remove()
-  //     } else {
-  //       LHS.by = RHS.text()
-  //       m.remove()
-  //       RHS.remove()
-  //     }
-  //   } else if (RHS instanceof Application ) {
-  //     if (RHS.child(0) instanceof LurchSymbol && RHS.child(0).text()==='CAS') { 
-  //       // TODO: handle the case where no arg is passed or it's not a symbol
-  //       LHS.by = { CAS: RHS.child(1).text() }
-  //       m.remove()
-  //       RHS.remove()
-  //     }
-  //   }
-  //   return 
-  // } )
   
   // attribute the previous sibling with .by attribute whose value is the text
   // of the next sibling if it is a symbol, and the next sibling LC itself if it isn't.
@@ -680,9 +655,13 @@ export const processShorthands = L => {
     
     // replace the parent with the new environment  
     parent.replaceWith(ans)
-  } )
 
-  // Expand equivalences
+  } )
+  
+  // update the index (TODO: only specific ones?)
+  addIndex(doc,'After ≡')
+
+  // Inline environments
   processSymbol( 'then' ,  m => { 
     // make a new array to contain the relevant LHS and RHS siblings
     let sibs = []
@@ -746,9 +725,10 @@ export const processShorthands = L => {
     // if it doesn't have a previous sibling, don't do anything.
     let prev = m.previousSibling()
     if (!prev) return
-    // the UI can only construct some> if it's followed by a symbol
+    // the UI can only construct some> if it's followed by a symbol declaration
     const dec = m.nextSibling()
-    // base case: if the body isn't an environment, and the previous sibling is not a continuation, just make it the body as expected
+    // base case: if the body isn't an environment, and the previous sibling is
+    // not a continuation, just make it the body as expected
     if (!(dec.body() instanceof Environment) && 
         !prev.previousSibling()?.continued ) {
       dec.popChild() // remove the placeholder
@@ -762,18 +742,8 @@ export const processShorthands = L => {
       } 
       // then unshift the prev sequence onto it
       while (prev) {
-        // write('prev is')
-        // write(prev)
         dec.body().unshiftChild(prev)
-        // write('new dec is')
-        // write(dec)
-        // write('new dec prev sibling is')
-        // write(dec.previousSibling())
-        // write('and it is')
-        // write(dec.previousSibling()?.continued)
         prev = (m.previousSibling()?.continued) ? m.previousSibling() : undefined
-        // write('new prev is')
-        // write(prev)
       }
     }
     // either way, prev should no longer be where it was, so just get rid of the some>
@@ -807,19 +777,6 @@ export const processShorthands = L => {
     if (m.parent().isAComment()) m.parent().ignore=true 
   })
   
-  // Labels
-  //
-  // Just a quickie lable mechanism that will be upgraded later.
-  // Labels are currently a single symbol of the form name> which assigns
-  // 'name' to the .label attribute of the next sibling.  Previous siblings
-  // aren't supported yet, nor is whitespace. 
-  // L.descendantsSatisfying( s => (s instanceof LurchSymbol) && 
-  //   /[^"()\[\]\s]+>/.test(s.text()) )
-  //   .forEach( s => { 
-  //     s.nextSibling().label=s.text().slice(0,-2).toLowerCase() 
-  //     s.remove()
-  //   } ) 
-
   // depricated but kept for backward compatibility
   processSymbol( '<<' , m => { 
     const target = m.previousSibling()

@@ -70,6 +70,9 @@ import * as TEST from "./utils/acidtestsweb.js"
 self.test = () => TEST.test(testarg)
 self.testall = () => TEST.testall(testarg)
 
+import { appSettings } from '../../../lurchmath/settings-install.js'
+self.appSettings = appSettings
+
 // Useful Lode and Reporting utilities
 self.lc = (s) => {
   const L = LogicConcept.fromPutdown(s)
@@ -228,7 +231,7 @@ const defaultOptions = {
 }
 
 // Syntactic sugar for the formatter
-const metavariable = "LDE MV"
+const metavariable = "Metavar"
 const instantiation = "LDE CI"
 const EFA = "LDE EFA"
 const formula = "Formula"

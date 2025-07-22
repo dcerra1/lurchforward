@@ -44,7 +44,8 @@ export const install = editor => {
     getConverter().then( result => converter = result )
     // Define reusable function that initiates the insertion of an expression
     const insertExpression = () => {
-        const mode = appSettings.get( 'expression editor type' )
+        // const mode = appSettings.get( 'expression editor type' )
+        const mode = 'Advanced'
         const atom = Atom.newInline( editor, '',
             mode == 'Beginner' ? {
                 type : 'expression',
@@ -574,21 +575,36 @@ export class Expression extends Atom {
                 return null
             }
         }
+        // utility used below
+        const convertToLC = () => {
+            try {
+              return LogicConcept.fromPutdown( 
+                converter( dialog.get( 'lurchNotation' ), 'lurch', 'putdown' ) 
+              )
+            } catch {
+                return null
+            }
+        }
         // if they edit the Lurch notation or latex, keep them in sync
         dialog.onChange = ( _, component ) => {
             if ( component.name == 'lurchNotation' ) {
-                const converted = convertToLatex()
-                if ( converted || converted === '' )
-                    mathLivePreview.setValue( converted )
+                // be sure the user input is valid syntax for BOTH parsers
+                // before allowing them to enter it
+                const convertedTex = convertToLatex()
+                const convertedLC = convertToLC()
+                const validSyntax = !!(convertedLC && (convertedTex || convertedTex === ''))
+                // console.log(validSyntax)
+                if ( validSyntax )
+                    mathLivePreview.setValue( convertedTex )
                 const lurchInputElement = dialog.querySelector( 'textarea' )
                 if ( lurchInputElement ) {
-                    if ( typeof converted === 'string' ) {
+                    if ( typeof convertedTex === 'string' ) {
                         lurchInputElement.classList.remove('badsyntax')
                     } else {
                         lurchInputElement.classList.add('badsyntax')
                     }
                 }
-                dialog.dialog.setEnabled( 'OK', !!converted )
+                dialog.dialog.setEnabled( 'OK', validSyntax )
             }
         }
         // Show it and if they accept any changes, apply them to the atom.
@@ -671,7 +687,8 @@ export class Expression extends Atom {
      *   {@link module:Atoms.Atom#edit edit() for Atoms}
      */
     edit () {
-        switch ( appSettings.get( 'expression editor type' ) ) {
+        // switch ( appSettings.get( 'expression editor type' ) ) {
+        switch ( 'Advanced' ) {
             case 'Beginner':
                 return this.editInBeginnerMode()
             case 'Intermediate':

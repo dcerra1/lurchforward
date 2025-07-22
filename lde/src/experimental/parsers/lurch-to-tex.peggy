@@ -100,6 +100,12 @@
     return `\\displaystyle\\sum_{${k}=${a}}^{${b}} ${f}`
   }
 
+  // convert summations to tex
+  const integral = (f,x,a,b) => {
+    if (a) return `\\displaystyle\\int_{${a}}^{${b}} ${f}\\,\\mathrm{d}${x}`
+    return `\\displaystyle\\int ${f}\\,\\mathrm{d}${x}`
+  }
+
   // convert indexed union to tex
   const union = (f,k,a) => {
     return `\\displaystyle\\bigcup_{${k}\\in ${a}} ${f}`
@@ -529,7 +535,7 @@ Comment = ( '%' / 'Comment'i ) __ a:StringLiteral
 
 // A string literal is anything enclosed in double quotes
 // Currently only used for comments
-StringLiteral = $('"' [^"]* '"')
+StringLiteral = '"' a:([^"]*) '"' { return `\\text{${a.join('')}}` }
 // Labels
 Label = 'label'i _ [(\[{"] _ a:([^)\]}"]+) _ [)\]}"]
   { return `\\text{\\textcolor{grey}{${a.join('')}}}` }
@@ -579,9 +585,11 @@ Environment =  '{' a:LCs '}' { return `\\left\\{ ${a} \\right\\}` }
 // Declare constants (cannot have a body and is a given)
 Declare = a:'declare'i __ b:DeclareSeq { return `${txt(a)} ${b}` }
 // ForSome declaration (always a claim)
-ForSome = body:Expression __ 'for'i __ 'some'i __ a:Symbol __ 'in'i __ b:Expression
-            { return `${body}\\text{ for some }${a}\\in ${b}` } /
-          body:Expression __ 'for' __ 'some' __ a:SymbolSeq
+// We also allow the special shorthand `for some x,y,z in A` since it is so common.
+// TODO: upgrade to allow environment bodies
+ForSome = body:Expression __ 'for'i __ 'some'i __ a:(Symbol)|1..,comma| __ 'in'i __ b:Expression 
+            { return `${body}\\text{ for some }${a.join(',')}\\in ${b}` } /
+          body:Expression __ 'for'i __ 'some'i __ a:SymbolSeq 
             { return `${body}\\text{ for some }${a}` }
 // the 'given' colon is optional since these are always 'given'. We also
 // allow the special shortand `Let x∈A` since it is so common.
@@ -766,7 +774,7 @@ Set = RelativeComp
 // Once again, Algebraic only has to point to the lowest precedence operator
 // that inherits the ones below it (but Choose does not). Atomic is passed up
 // the chain from Exp.
-Algebraic = Choose / Sum / Summation / IndexedUnion / IndexedIntersect / Product
+Algebraic = Choose / Sum / Summation / Integral / IndexedUnion / IndexedIntersect / Product
 
   // we make this lower precedence that sums so e.g. 'n+1 choose k' can be
   // entered without parentheses
@@ -783,22 +791,58 @@ Algebraic = Choose / Sum / Summation / IndexedUnion / IndexedIntersect / Product
   // k to n of f(k) + sum k to n of g(k)' will be the sum of the two summations,
   // rather than a single summation where the second one is part of the summands
   // of the first.
-  Summation = 'sum'i __ k:Symbol __ a:('from' __ @Product __)? 'to'i __ b:Product
+  Summation = 'sum'i __ k:Symbol __ a:('from' __ @Algebraic __)? 'to'i __ b:Algebraic
               __ ('of'i __)? f:Product
                   { return summation(f,k,a,b) }  /
 
-              'sum'i __ k:Symbol _ '=' _ a:Product __ 'to'i __ b:Product
+              'sum'i __ k:Symbol _ '=' _ a:Algebraic __ 'to'i __ b:Algebraic
               __ ('of'i __)? f:Product
                   { return summation(f,k,a,b) }  /
 
               'sum'i __ ('of'i __)? f:Product __
               ('as'i __ / 'for'i__) k:Symbol __ ('goes'i __)?
-              a:('from' __ @Product __)? 'to'i __ b:Product
+              a:('from' __ @Algebraic __)? 'to'i __ b:Algebraic
                   { return summation(f,k,a,b) }  /
 
               'sum'i '(' _ f:Product comma
-                           k:Symbol comma a:(@Product comma)? b:Product _ ')'
+                           k:Symbol comma a:(@Algebraic comma)? b:Algebraic _ ')'
                   { return summation(f,k,a,b) }
+  
+  // definite integrals are similar to summations, but we don't have to fuss about 
+  // their precedence relative to addition because they have a closing delimiter
+  Integral = 'int'i __ x:Symbol _ '=' _ a:Algebraic __ 'to'i __ b:Algebraic
+              __ ('of'i __)? f:Algebraic
+                  { return integral(f,x,a,b) }  / 
+
+              'int'i __ x:Symbol __ a:('from' __ @Algebraic __)? 'to'i __ b:Algebraic
+              __ ('of'i __)? f:Product
+                  { return integral(f,x,a,b) }  /  
+
+              'int'i __ ('of'i __)? f:Algebraic 
+              __ ('as'i __ / 'for'i__) x:Symbol __ ('goes'i __)? 
+              a:('from' __ @Algebraic __)? 'to'i __ b:Algebraic
+                  { return integral(f,x,a,b) }  /
+
+              'int'i '(' _ f:Algebraic comma 
+              x:Symbol comma a:(@Algebraic comma)? b:Algebraic _ ')'
+                  { return integral(f,x,a,b) }  /
+              
+              // antiderivatives (indefinite integrals)
+
+              'int'i __ ('with'i __ 'respect'i __ 'to'i / 'wrt'i ) __ x:Symbol 
+              __ ('of'i __)? f:Algebraic
+                  { return integral(f,x) }  / 
+
+              'int'i __ ('of'i __)? f:Algebraic 
+              __ ('with'i __ 'respect'i __ 'to'i / 'wrt'i) __ x:Symbol 
+                  { return integral(f,x) }  /
+
+              'int'i '(' _ f:Algebraic comma x:Symbol _ ')'
+                  { return integral(f,x) } /
+
+              'int'i __ f:Algebraic __ 'd' x:Symbol
+                  { return integral(f,x) }
+
 
     Product   = a:(Denom/Negated/ExpArgs)
                 |1..,(_'⋅'_/_'cdot'_x/_'*'_)|
@@ -933,7 +977,7 @@ Prefix =  // LDE EFA's first
 // Atomic Expressions
 //
 // morally atomic expressions (do not require parentheses)
-Atomic = Parenthesized / // EquivalenceClass
+Atomic = Parenthesized / StringLiteral / // EquivalenceClass
          Matrix / Tuple / SetBracketed / Symbol / Number
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -987,7 +1031,7 @@ Natural = $( [1-9][0-9]* / '0' )
 // For clarity in reading the putdown output we rename some special frequently used
 // symbols.
 Symbol "Symbol" =  a:('contradiction' / '✔︎' / '✗' / '⁉︎' / '~' ) { return texsymbol(a) } /
-  !(ReservedWord !alphanum) a:([a-z]i alphanum* )
+  StringLiteral / !(ReservedWord !alphanum) a:([a-z]i alphanum* )
   { let b = texsymbol(a[0]+a[1].join(''))
     return (b.length>1 && !b.startsWith('\\')) ? `\\text{${b}}` : b }
 

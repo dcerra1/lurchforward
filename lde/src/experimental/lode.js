@@ -47,6 +47,9 @@ import { XMLParser } from 'fast-xml-parser'
 global.xml = (s) => new XMLParser({ ignoreAttributes:false }).parse(s)
 // import asciimath2latex from './parsers/asciimath-to-latex.js'
 import { latexToLurch } from './parsers/tex-to-lurch.js'
+// import readline utility for interactive Lode utilities
+import readline from 'readline'
+
 // import * as MathLive from 'mathlive'
 // import { getConverter } from './utils/math-live.js'
 // import katex from 'katex'
@@ -66,6 +69,8 @@ import './disable-event-target.js'
 import * as Lurch from '../index.js'
 import { Problem } from '../matching/problem.js'
 import CNF from '../validation/conjunctive-normal-form.js'
+import TreeIndexer from './tree-indexer.js'
+import { addLurchIndices, addIndex } from './index-definitions.js'
 import { LurchOptions } from './lurch-options.js'
 
 // Experimental Code
@@ -176,28 +181,30 @@ import Tracer from 'pegjs-backtrace'
 global.Tracer = Tracer
 
 // External packages
+
 // load Algebrite
 import Algebrite from '../../dependencies/algebrite.js'
-// load Z3
-import { init as z3init } from 'z3-solver'
-// export this for making new Contexts if I want more than one
-const { Context } = await z3init()
-global.Context = Context
-// set a default unnamed Context for Lode
-global.Z3 = Context()
-// the default solver for Lode
-// 
-// example:
-// ▶︎ solver.add(z3.Real.const("b").neq(z3.Real.val(0)))
-// ▶︎ solver.add(z3.Real.const("a").eq(z3.Real.const("c").div(z3.Real.const("b"))))
-// ▶︎ solver.add(z3.Real.const("a").mul(z3.Real.const("b")).neq(z3.Real.const("c")))
-// ▶︎ await(solver.check())
-// unsat
-global.solver = new Z3.Solver()
-global.tree = x => Algebrite.run(`printlist(${x})`)
-// and our custom utilities to support it
-import Z3Utils from './z3.js'
-Object.assign( global, Z3Utils )
+
+// // load Z3 (temporarily disabled for efficiency)
+// import { init as z3init } from 'z3-solver'
+// // export this for making new Contexts if I want more than one
+// const { Context } = await z3init()
+// global.Context = Context
+// // set a default unnamed Context for Lode
+// global.Z3 = Context()
+// // the default solver for Lode
+// // 
+// // example:
+// // ▶︎ solver.add(z3.Real.const("b").neq(z3.Real.val(0)))
+// // ▶︎ solver.add(z3.Real.const("a").eq(z3.Real.const("c").div(z3.Real.const("b"))))
+// // ▶︎ solver.add(z3.Real.const("a").mul(z3.Real.const("b")).neq(z3.Real.const("c")))
+// // ▶︎ await(solver.check())
+// // unsat
+// global.solver = new Z3.Solver()
+// global.tree = x => Algebrite.run(`printlist(${x})`)
+// // and our custom utilities to support it
+// import Z3Utils from './z3.js'
+// Object.assign( global, Z3Utils )
 
 // load SAT
 import { satSolve } from '../../dependencies/LSAT.js'
@@ -220,6 +227,9 @@ Object.assign( global, ParsingTools )
 global.CNF = CNF
 global.Problem = Problem
 global.CNFProp = CNFProp
+global.TreeIndexer = TreeIndexer
+global.addIndex = addIndex
+global.addLurchIndices = addLurchIndices
 
 // External packages
 global.satSolve = satSolve
@@ -254,7 +264,7 @@ global.ls = (args='') => {
 }
 
 // because it's easier to remember
-global.metavariable = 'LDE MV'
+global.metavariable = 'Metavar'
 
 // for controlling the inspect-level for the default REPL echo
 global.Depth = Infinity
@@ -575,8 +585,14 @@ rpl.defineCommand( "list", {
 // define the Lode .test command
 rpl.defineCommand( "test", {
   help: "Run the default test script ('acidtests.js').",
-  action() { 
+  action(n) { 
     clearAccumulator()
+    // If a number is passed, store it in a global variable
+    if (n !== "" && Number.isInteger(Number(n))) {
+      global.TestIndex = Number(n)
+    } else {
+      delete global.TestIndex  // clean up if not specified
+    }
     initialize('utils/acidtests')
     this.displayPrompt()
   }
@@ -585,7 +601,14 @@ rpl.defineCommand( "test", {
 // define the Lode .test command
 rpl.defineCommand( "testall", {
   help: "Run the default test script ('acidtests.js') including student files (long!).",
-  action() {
+  action(n) {
+    clearAccumulator()
+    // If a number is passed, store it in a global variable
+    if (n !== "" && Number.isInteger(Number(n))) {
+      global.TestIndex = Number(n)
+    } else {
+      delete global.TestIndex  // clean up if not specified
+    }
     const saved = LurchOptions.runStudentTests 
     LurchOptions.runStudentTests = true 
     initialize('utils/acidtests')
@@ -750,6 +773,131 @@ rpl.defineCommand( "fixrepo", {
 
     console.log(defaultPen('...done'))
     this.displayPrompt()
+  }
+})
+
+// define the 'interpret' list of function calls to loop through with .step,
+// assigning appropriate labels
+const makeInterpretSteps = () => {
+  const rawlist = [ 
+    ['addSystemDeclarations', addSystemDeclarations],  
+    ['processShorthands', doc => {
+        addIndex(doc,'Parsing')
+        return processShorthands(doc)
+      }],
+    [ 'moveDeclaresToTop', doc => { 
+        addIndex(doc,'Interpret')
+        return moveDeclaresToTop(doc)
+      }],
+    [ 'processTheorems', processTheorems ],
+    [ 'processDeclarationBodies',processDeclarationBodies ],
+    [ 'processLetEnvironments', processLetEnvironments ],
+    [ 'processBindings', doc => {
+        addIndex(doc,'Interpret')
+        return processBindings(doc)
+      }],
+    ['processRules',processRules],
+    ['splitConclusions',splitConclusions],
+    ['assignProperNames',assignProperNames],
+    ['markDeclaredSymbols',markDeclaredSymbols]
+  ]
+  rawlist.forEach( ([ nm, fn ]) => {
+    fn.label = nm
+  })
+  return rawlist.map( x => x[1])
+}
+global.interpretSteps = makeInterpretSteps()
+
+// Add interactive step-through utility to global scope
+global.runStepByStep = async (funcs, doc) => {
+
+  if (!Array.isArray(funcs) || funcs.length === 0) {
+    console.log('No functions provided.')
+    return
+  }
+
+  console.log(`\nInteractive step-through started for ${funcs.length} functions on`)
+  console.log(rpl.writer(doc))
+
+  const promptKey = (message) => {
+    return new Promise(resolve => {
+      process.stdin.setRawMode(true)
+      process.stdin.resume()
+      process.stdin.once('data', key => {
+        const k = key.toString()
+        resolve(k)
+      })
+      process.stdout.write(message)
+    })
+  }
+
+  let escaped = false
+  try {
+    for (let i = 0; i < funcs.length; i++) {
+      const fn = funcs[i]
+      const name = fn.label || fn.name || `Function #${i + 1}`
+
+      const key = await promptKey(`\n[${i + 1}/${funcs.length}] Run "${name}"? (Enter=run, Esc=quit): `)
+
+      if (key === '\u001b') { // ESC key
+        escaped = true
+        break
+      }
+
+      if (key === '\r') { // Enter
+        try {
+          const result = await fn(doc)
+          console.log(rpl.writer(result))
+          doc = result // optional chaining of results
+        } catch (err) {
+          console.error(`Error in ${name}:`, err)
+        }
+      }
+    }
+  } finally {
+    const msg = (escaped)?'\n\n✗ Aborting step-through.\n':'\n✔ Step-through complete.\n'
+    console.log(msg)
+    rpl.displayPrompt()     
+  }
+}
+
+// Define .step command for REPL
+rpl.defineCommand("step", {
+  help: "Interactively run a list of functions on a given argument.",
+  action(input) {
+    try {
+      // Expect input like: "arg f1 f2 f3" (functions must exist in global scope)
+      const parts = input.trim().split(/\s+/)
+      if (parts[0] === '') {
+        console.log("Usage: .step <arg>")
+        this.displayPrompt()
+        return
+      }
+      
+      let docName = parts[0]
+      let doc
+      if (docName in global) {
+        doc = global[docName] // Use the actual variable if it exists
+      } else {
+        // If it's not a variable name, try JSON parse
+        try {
+          doc = JSON.parse(docName)
+        } catch {
+          doc = docName // fallback to raw string
+        }
+      }
+
+      const funcs = interpretSteps
+      // const funcs = parts.slice(1).map(fnName => {
+      //   if (typeof global[fnName] === 'function') return global[fnName]
+      //   throw new Error(`Function not found: ${fnName}`)
+      // })
+
+      runStepByStep(funcs, doc).then(() => this.displayPrompt())
+    } catch (err) {
+      console.error('Error starting step-through:', err.message)
+      this.displayPrompt()
+    }
   }
 })
 
