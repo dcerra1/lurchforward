@@ -4,7 +4,7 @@
                 <script language="javascript">
                     const link = document.querySelector( '#loadlink > p > a' )
                     const thisURL = encodeURIComponent( window.location.href )
-                    link?.setAttribute( 'href', 'https://lurch.plus/instructor.html?load=' + thisURL )
+                    link?.setAttribute( 'href', 'https://dcerra1.github.io/lurchforward/instructor.html?load=' + thisURL )
                 </script>
             </div>
         
@@ -397,7 +397,8 @@
 </div>
 <p>&nbsp;</p></div>
         </div></div><div class="lurch-atom-body"><table><colgroup><col><col></colgroup><tbody><tr><td colspan="2"><b>Imported dependency document</b></td></tr><tr><td>Description:</td><td><tt>none</tt></td></tr><tr><td>Filename:</td><td><tt>math/examples/research/Axioms - Rules.lurch</tt></td></tr><tr><td>Source:</td><td>the web</td></tr><tr><td>Auto-refresh:</td><td>yes</td></tr></tbody></table></div></div></div></div>
-            <div id="document"><div class="lurch-atom" data-metadata_type="&quot;theorem&quot;" data-shell_title="Theorem:">
+            <div id="document"><h2>Lemma 4</h2>
+<div class="lurch-atom" data-metadata_type="&quot;theorem&quot;" data-shell_title="Theorem:">
 <p><strong>Lemma 4:&nbsp;</strong><span class="lurch-atom" contenteditable="false" data-metadata_type="&quot;expression&quot;" data-metadata_lurch-notation="&quot;n!*(sum k=0 to n of 1/k!) in ZZ&quot;"><span class="lurch-atom-body"><span class="ML__latex"><span class="ML__base"><span class="ML__mathit">n</span><span class="ML__cmr">!</span><span class="ML__cmr">&sdot;</span><span class="ML__left-right" style="margin-top: -1.302113em; height: 2.9535100000000005em;"><span class="ML__open ML__delim-size4">(</span><span class="ML__op-group"><span class="ML__vlist-t ML__vlist-t2"><span class="ML__vlist-r"><span class="ML__vlist" style="height: 1.66em;"><span class="ML__center" style="top: -1.84em;"><span style="height: 0.49em; display: inline-block; font-size: 70%;"><span class="ML__mathit" style="margin-right: 0.04em;">k</span><span class="ML__cmr">=0</span></span></span><span class="ML__center" style="top: -3.05em;"><span style="height: 1.61em; display: inline-block;"><span class="ML__op-symbol ML__large-op">&sum;</span></span></span><span class="ML__center" style="top: -4.3em;"><span style="height: 0.31em; display: inline-block; font-size: 70%;"><span class="ML__mathit">n</span></span></span></span><span class="ML__vlist-s">​</span></span></span></span><span class="ML__mfrac"><span class="ML__vlist-t ML__vlist-t2"><span class="ML__vlist-r"><span class="ML__vlist" style="height: 1.15em;"><span class="ML__center" style="top: -2.31em;"><span style="height: 0.7em; display: inline-block;"><span class="ML__mathit" style="margin-right: 0.04em;">k</span><span class="ML__cmr">!</span></span></span><span class="ML__center" style="top: -3.5em;"><span style="height: 0.65em; display: inline-block;"><span class="ML__cmr">1</span></span></span></span><span class="ML__vlist-s">​</span></span></span></span><span class="ML__close ML__delim-size4">)</span></span><span class="ML__cmr">&isin;</span><span class="ML__bb">Z</span></span></span></span></span></p>
 </div>
 <div class="lurch-atom" data-metadata_type="&quot;proof&quot;" data-shell_title="Proof:">
